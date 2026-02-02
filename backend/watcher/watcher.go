@@ -71,13 +71,41 @@ func Start() {
 		ticker := time.NewTicker(10 * time.Second) // Check every 10 seconds
 		defer ticker.Stop()
 
-		for {
-			select {
-			case <-ticker.C:
-				checkPendingPayments()
-			}
+		for range ticker.C {
+			checkPendingPayments()
 		}
 	}()
+	// --- THÊM ROUTINE 2: Dọn dẹp Invoice rác (Garbage Collector) ---
+	go func() {
+		// Chạy mỗi 5 phút một lần
+		cleanupTicker := time.NewTicker(5 * time.Minute)
+		defer cleanupTicker.Stop()
+		for range cleanupTicker.C {
+			cleanupExpiredInvoices()
+		}
+	}()
+}
+
+// Hàm thực hiện việc dọn dẹp
+func cleanupExpiredInvoices() {
+	// Logic: Tìm tất cả invoice 'pending' đã tạo quá 30 phút -> Chuyển thành 'expired'
+	// Interval '30 minutes' là thời gian an toàn để user thao tác
+	result, err := database.DB.Exec(`
+        UPDATE invoice 
+        SET status = 'expired' 
+        WHERE status = 'pending' 
+        AND created_at < NOW() - INTERVAL '30 minutes'
+    `)
+
+	if err != nil {
+		log.Printf("Error cleaning up expired invoices: %v", err)
+		return
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected > 0 {
+		log.Printf("Garbage Collector: Cleaned up %d expired invoices.", rowsAffected)
+	}
 }
 
 func checkPendingPayments() {

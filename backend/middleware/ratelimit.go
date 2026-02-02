@@ -8,10 +8,10 @@ import (
 	"time"
 )
 
-// Cấu hình Rate Limit
+// Rate Limit configuration
 const (
-	RequestLimit = 5               // Số request tối đa
-	WindowSize   = 1 * time.Minute // Trong khoảng thời gian này
+	RequestLimit = 5               // Maximum hit request
+	WindowSize   = 1 * time.Minute // In this window time range
 )
 
 type ClientState struct {
