@@ -44,12 +44,11 @@ export async function getUsdcBalance(
   try {
     const ata = await getAssociatedTokenAddress(USDC_MINT_ADDRESS, publicKey);
     const account = await getAccount(connection, ata);
-    // USDC has 6 decimal places.
     return Number(account.amount) / 1_000_000;
   } catch (error) {
-    // This can happen if the associated token account doesn't exist.
-    console.warn("Could not fetch USDC balance:", error);
-    return null;
+    // SỬA Ở ĐÂY: Thay vì return null, hãy return 0
+    console.warn("Could not fetch USDC balance (likely no account):", error);
+    return 0;
   }
 }
 
@@ -88,7 +87,8 @@ export async function createUsdcTransfer(
     new TransactionInstruction({
       keys: [{ pubkey: publicKey, isSigner: true, isWritable: true }],
       data: Buffer.from(memo, "utf-8"),
-      programId: new PublicKey("MemoSq4gqABAXKb96qnH8TysNcVcvnh3pas8bcBBNWW"),
+      // Using Memo v1 ID instead of v2
+      programId: new PublicKey("Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo"),
     }),
   );
 

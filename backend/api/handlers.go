@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"solana_paywall/backend/database"
+	"solana_paywall/backend/watcher"
+
 	"github.com/google/uuid"
 )
 
@@ -47,7 +49,6 @@ func CreateInvoice(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(InvoiceResponse{Reference: reference})
 }
-
 
 type ConfirmInvoiceRequest struct {
 	Reference string `json:"reference"`
@@ -95,4 +96,36 @@ func GetContent(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(ContentResponse{HasAccess: hasAccess})
+}
+
+type RecheckRequest struct {
+	Reference string `json:"reference"`
+}
+
+type RecheckResponse struct {
+	Status string `json:"status"`
+}
+
+func RecheckPayment(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Only POST method is allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req RecheckRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Gọi sang watcher để check
+	status, err := watcher.ForceRecheckByReference(req.Reference)
+	if err != nil {
+		// Xử lý lỗi (ví dụ không tìm thấy invoice)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(RecheckResponse{Status: status})
 }

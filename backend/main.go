@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"solana_paywall/backend/api"
 	"solana_paywall/backend/database"
+	"solana_paywall/backend/middleware"
 	"solana_paywall/backend/watcher"
 )
 
@@ -15,6 +16,7 @@ func main() {
 	http.HandleFunc("/api/content", api.GetContent)
 	http.HandleFunc("/api/invoice", api.CreateInvoice)
 	http.HandleFunc("/api/invoice/confirm", api.ConfirmInvoice)
+	http.HandleFunc("/api/recheck", middleware.RateLimit(api.RecheckPayment))
 
 	log.Println("Server starting on port 8080...")
 	if err := http.ListenAndServe(":8080", nil); err != nil {
