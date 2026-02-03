@@ -1,14 +1,5 @@
-import {
-  Connection,
-  PublicKey,
-  Transaction,
-  TransactionInstruction,
-} from "@solana/web3.js";
-import {
-  getAssociatedTokenAddress,
-  getAccount,
-  createTransferInstruction,
-} from "@solana/spl-token";
+import { Connection, PublicKey } from "@solana/web3.js";
+import { getAssociatedTokenAddress, getAccount } from "@solana/spl-token";
 
 // ----------------------------------------------------------------------
 // NOTE: Ensure this is the correct USDC Mint address.

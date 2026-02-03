@@ -14,35 +14,20 @@ export function Paywall({ children }: { children: React.ReactNode }) {
   const { connection } = useConnection();
   const { publicKey } = useWallet();
   const [usdcBalance, setUsdcBalance] = useState<number | null>(null);
-  const [hasAccess, setHasAccess] = useState(false);
   const [isClient, setIsClient] = useState(false);
-  const [loading, setLoading] = useState(false);
 
   // --- LOGIC BALANCE & POLLING (GIỮ NGUYÊN) ---
   useEffect(() => {
     if (publicKey) {
       getUsdcBalance(connection, publicKey).then(setUsdcBalance);
-      fetch(`/api/content?walletAddress=${publicKey.toBase58()}`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.hasAccess) {
-            setHasAccess(true);
-          }
-        })
-        .catch(() => setHasAccess(false));
     } else {
       setUsdcBalance(null);
-      setHasAccess(false);
     }
   }, [publicKey, connection]);
 
   useEffect(() => {
     setIsClient(true);
   }, []);
-
-  const handlePayment = async () => {
-    // Insert payment logic here
-  };
 
   // --- UI COMPONENTS ---
 
@@ -72,19 +57,6 @@ export function Paywall({ children }: { children: React.ReactNode }) {
       </div>
     </nav>
   );
-
-  // --- CASE 1: ĐÃ MUA -> HIỆN FULL BÀI VIẾT (CHILDREN) ---
-  if (hasAccess) {
-    return (
-      <div className="min-h-screen bg-white">
-        <Navbar />
-        {/* Nội dung Premium */}
-        <main className="max-w-3xl mx-auto px-4 py-8 animate-fade-in">
-          {children}
-        </main>
-      </div>
-    );
-  }
 
   // --- CASE 2: CHƯA MUA -> HIỆN PAYWALL ---
   return (
@@ -118,7 +90,7 @@ export function Paywall({ children }: { children: React.ReactNode }) {
             While those are breathtaking, they are also incredibly crowded.
           </p>
           <p>
-            After living in Kyoto for 3 years, I’ve discovered a collection of
+            After living in Kyoto for 3 years, I've discovered a collection of
             secret temples, quiet bamboo groves, and artisanal tea houses that
             aren't on Google Maps.
           </p>
@@ -178,37 +150,10 @@ export function Paywall({ children }: { children: React.ReactNode }) {
                   <>
                     {/* Pay Button */}
                     <button
-                      onClick={handlePayment}
-                      disabled={loading}
+                      onClick={() => alert("Comming Soon")}
                       className="w-full py-3.5 rounded-xl bg-gray-900 text-white font-bold hover:bg-gray-800 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
                     >
-                      {loading ? (
-                        <>
-                          <svg
-                            className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                          >
-                            <circle
-                              className="opacity-25"
-                              cx="12"
-                              cy="12"
-                              r="10"
-                              stroke="currentColor"
-                              strokeWidth="4"
-                            ></circle>
-                            <path
-                              className="opacity-75"
-                              fill="currentColor"
-                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                            ></path>
-                          </svg>
-                          Processing...
-                        </>
-                      ) : (
-                        "Unlock Content"
-                      )}
+                      Unlock Content
                     </button>
                   </>
                 )}
