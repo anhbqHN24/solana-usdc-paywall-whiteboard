@@ -20,24 +20,36 @@ The **Solana USDC Paywall** allows content creators to gate their content behind
 
 This project was built in 4 distinct phases. You can explore the code at each stage by checking out the corresponding branches.
 
-### [Phase 1: Wallet Connection & Balance](git checkout phase-1-frontend-setup)
+### [Phase 1: Wallet Connection & Balance]
+```bash
+git checkout phase-1-frontend-setup
+```
 *Focus: Frontend Setup & Web3 Integration*
 - Implemented Solana Wallet Adapter.
 - UI for connecting wallets and displaying user's USDC balance on Devnet.
 
-### [Phase 2: Protected Paywall Foundation](git checkout phase-2-backend-db)
+### [Phase 2: Protected Paywall Foundation]
+```bash
+git checkout phase-2-backend-db
+```
 *Focus: Backend Architecture & Database*
 - Set up PostgreSQL schema (`paid_wallet`, `invoices`).
 - Developed the Go backend API to check payment status (`GET /api/content`).
 - Created the "Locked" vs. "Unlocked" UI states.
 
-### [Phase 3: Payment Logic & Blockchain Watcher](git checkout phase-3-core-payment)
+### [Phase 3: Payment Logic & Blockchain Watcher]
+```bash
+git checkout phase-3-core-payment
+```
 *Focus: The Core Payment Flow*
 - Invoice generation logic (`POST /api/invoice`).
 - **Transaction Watcher:** A background worker monitoring the Solana blockchain for specific memo signals.
 - Frontend polling for real-time payment confirmation.
 
-### [Phase 4: Polish & Production Ready](git checkout phase-4-polished)
+### [Phase 4: Polish & Production Ready]
+```bash
+git checkout phase-4-polished
+```
 *Focus: UX, Security & Edge Cases*
 - Added "Recheck Payment" flow for manual validation.
 - Implemented Rate Limiting to prevent API abuse.
