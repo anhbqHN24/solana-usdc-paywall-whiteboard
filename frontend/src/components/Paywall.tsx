@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { getUsdcBalance } from "@/lib/solana";
 import {
   MapPinIcon,
@@ -10,13 +10,20 @@ import {
   StarIcon,
 } from "@heroicons/react/24/solid";
 
+const WalletMultiButton = dynamic(
+  () =>
+    import("@solana/wallet-adapter-react-ui").then(
+      (mod) => mod.WalletMultiButton,
+    ),
+  { ssr: false },
+);
+
 export function Paywall({ children }: { children: React.ReactNode }) {
   const { connection } = useConnection();
   const { publicKey } = useWallet();
   const [usdcBalance, setUsdcBalance] = useState<number | null>(null);
-  const [isClient, setIsClient] = useState(false);
 
-  // --- LOGIC BALANCE & POLLING (GIỮ NGUYÊN) ---
+  // --- LOGIC GET WALLET USDC BALANCE ---
   useEffect(() => {
     if (publicKey) {
       getUsdcBalance(connection, publicKey).then(setUsdcBalance);
@@ -24,10 +31,6 @@ export function Paywall({ children }: { children: React.ReactNode }) {
       setUsdcBalance(null);
     }
   }, [publicKey, connection]);
-
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
 
   // --- UI COMPONENTS ---
 
@@ -41,30 +44,26 @@ export function Paywall({ children }: { children: React.ReactNode }) {
           </span>
         </div>
         <div className="flex items-center gap-4">
-          {/* Chỉ hiển thị số dư khi đã load xong client */}
-          {isClient && publicKey && usdcBalance !== null && (
+          {/* Only display balance after establish connection with wallet */}
+          {publicKey && usdcBalance !== null && (
             <span className="hidden sm:block text-sm text-gray-500 font-mono bg-gray-50 px-2 py-1 rounded">
               {usdcBalance.toFixed(2)} USDC
             </span>
           )}
 
-          {/* --- SỬA LỖI Ở ĐÂY --- */}
-          {/* Chỉ render nút Ví khi isClient = true để tránh lỗi Hydration */}
-          {isClient && (
-            <WalletMultiButton className="!bg-gray-900 hover:!bg-gray-800 !h-9 !px-4 !text-sm !font-medium !rounded-full" />
-          )}
+          <WalletMultiButton className="!bg-gray-900 hover:!bg-gray-800 !h-9 !px-4 !text-sm !font-medium !rounded-full" />
         </div>
       </div>
     </nav>
   );
 
-  // --- CASE 2: CHƯA MUA -> HIỆN PAYWALL ---
+  // --- VIEW PAYWALL ---
   return (
     <div className="min-h-screen bg-white flex flex-col font-sans">
       <Navbar />
 
       <main className="flex-grow max-w-3xl mx-auto px-4 py-12 w-full">
-        {/* Header Bài Viết */}
+        {/* News Header */}
         <div className="space-y-4 mb-8">
           <span className="text-rose-600 font-bold text-sm tracking-wider uppercase flex items-center gap-2">
             <StarIcon className="w-4 h-4" /> Premium Guide
@@ -82,7 +81,7 @@ export function Paywall({ children }: { children: React.ReactNode }) {
           </div>
         </div>
 
-        {/* Nội dung Public (Teaser) */}
+        {/* News Public Content (Teaser) */}
         <article className="prose prose-lg text-gray-600 leading-relaxed">
           <p>
             Kyoto is arguably the most beautiful city in Japan, but most
@@ -95,7 +94,6 @@ export function Paywall({ children }: { children: React.ReactNode }) {
             aren't on Google Maps.
           </p>
 
-          {/* Ảnh minh họa */}
           <div className="my-8 rounded-xl overflow-hidden bg-gray-100 h-64 md:h-80 w-full relative group shadow-sm">
             <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent flex items-end p-6">
               <span className="text-white font-medium flex items-center gap-2">
@@ -133,30 +131,24 @@ export function Paywall({ children }: { children: React.ReactNode }) {
             </div>
 
             {/* --- INTERACTION (BUTTONS) --- */}
-            {!isClient ? (
-              <div className="w-full h-12 bg-gray-100 rounded-xl animate-pulse"></div>
+            {!publicKey ? (
+              <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
+                <p className="text-sm text-gray-600 mb-3">
+                  Connect your wallet to purchase
+                </p>
+                <div className="flex justify-center">
+                  <WalletMultiButton className="!bg-rose-600 hover:!bg-rose-700 !w-full !justify-center" />
+                </div>
+              </div>
             ) : (
               <>
-                {!publicKey ? (
-                  <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-                    <p className="text-sm text-gray-600 mb-3">
-                      Connect your wallet to purchase
-                    </p>
-                    <div className="flex justify-center">
-                      <WalletMultiButton className="!bg-rose-600 hover:!bg-rose-700 !w-full !justify-center" />
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    {/* Pay Button */}
-                    <button
-                      onClick={() => alert("Comming Soon")}
-                      className="w-full py-3.5 rounded-xl bg-gray-900 text-white font-bold hover:bg-gray-800 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
-                    >
-                      Unlock Content
-                    </button>
-                  </>
-                )}
+                {/* Pay Button */}
+                <button
+                  onClick={() => alert("Comming Soon")}
+                  className="w-full py-3.5 rounded-xl bg-gray-900 text-white font-bold hover:bg-gray-800 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+                >
+                  Unlock Content
+                </button>
               </>
             )}
             <p className="text-xs text-gray-400 mt-6 flex items-center justify-center gap-1">

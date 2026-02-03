@@ -11,16 +11,14 @@
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: 'Inter', system-ui, sans-serif; /* Hoặc font Serif nếu bạn muốn nghệ hơn */
+  font-family: 'Inter', system-ui, sans-serif;
 }
 
-/* Hiệu ứng làm mờ nội dung bên dưới Paywall */
 .blur-mask {
   mask-image: linear-gradient(to bottom, black 0%, transparent 100%);
   -webkit-mask-image: linear-gradient(to bottom, black 0%, transparent 100%);
 }
 
-/* Animation nhẹ nhàng */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }

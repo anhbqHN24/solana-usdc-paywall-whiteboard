@@ -9,6 +9,7 @@ A premium travel guide platform powered by Solana blockchain. Users pay **10 USD
 ## 🚀 Features
 
 ### Core Payment Flow (Phase 1-3)
+- **✨ Init UI:** "Wanderlust Guides" theme - Clean, modern, light-mode travel blog interface.
 - **Direct USDC Payment:** Users pay directly from their Phantom/Solflare wallet to the Merchant wallet.
 - **On-Chain Verification:** Backend verifies transactions directly on the Solana blockchain (Signature & Memo).
 - **Secure Access:** Content is unlocked only after successful payment verification.
@@ -18,7 +19,6 @@ A premium travel guide platform powered by Solana blockchain. Users pay **10 USD
 - **⏳ 5-Minute Payment Window:** Countdown timer ensures payment sessions expire to prevent stale transactions.
 - **🔄 Smart Recheck Mechanism:** Users can manually trigger a status check if the websocket/polling misses the confirmation.
 - **🛡️ Rate Limiting:** Backend protects the verification API from spam (5 requests/minute/IP).
-- **✨ Polished UI:** "Wanderlust Guides" theme - Clean, modern, light-mode travel blog interface.
 - **⚡ High Performance:** Optimistic UI updates and Priority Fees ensuring fast transaction processing on Solana.
 
 ## 🛠 Tech Stack
