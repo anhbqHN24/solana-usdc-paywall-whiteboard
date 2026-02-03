@@ -20,8 +20,8 @@
 - [x] **State Persistence**: Handle page refreshes and transaction storage.
 
 ## Phase 4: Polishing the app
-- [] **Recheck Flow**: Implement `POST /api/recheck` for manual payment validation.
-- [] **Frontend Polish**: Add "Recheck Payment" button and improve error handling.
-- [] **Edge Cases**: Handle double payments, invalid memos, and timeouts.
-- [] **Rate Limiting**: Protect recheck endpoint.
-- [] **Testing**: Verify all flows on Devnet.
+- [ ] **Recheck Flow**: Implement `POST /api/recheck` for manual payment validation.
+- [ ] **Frontend Polish**: Add "Recheck Payment" button and improve error handling.
+- [ ] **Edge Cases**: Handle double payments, invalid memos, and timeouts.
+- [ ] **Rate Limiting**: Protect recheck endpoint.
+- [ ] **Testing**: Verify all flows on Devnet.
