@@ -7,10 +7,10 @@
 - [x] **Display State**: Show wallet address and balance when connected.
 
 ## Phase 2: Protected paywall
-- [ ] **Database Schema**: Create `paid_wallet` and `invoice` tables in PostgreSQL.
-- [ ] **Backend Setup**: Initialize Go server and DB connection.
-- [ ] **API Endpoint**: Implement `GET /api/content` to check payment status.
-- [ ] **Frontend Integration**: Call API to check access and show locked/unlocked state.
+- [x] **Database Schema**: Create `paid_wallet` and `invoice` tables in PostgreSQL.
+- [x] **Backend Setup**: Initialize Go server and DB connection.
+- [x] **API Endpoint**: Implement `GET /api/content` to check payment status.
+- [x] **Frontend Integration**: Call API to check access and show locked/unlocked state.
 
 ## Phase 3: Pay with USDC
 - [ ] **Backend Invoice**: Implement `POST /api/invoice` to generate payment intent.
