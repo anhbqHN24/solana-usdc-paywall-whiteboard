@@ -49,36 +49,6 @@ func CreateInvoice(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(InvoiceResponse{Reference: reference})
 }
 
-type ConfirmInvoiceRequest struct {
-	Reference string `json:"reference"`
-	Signature string `json:"signature"`
-}
-
-func ConfirmInvoice(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Only POST method is allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req ConfirmInvoiceRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-	if req.Reference == "" || req.Signature == "" {
-		http.Error(w, "reference and signature are required", http.StatusBadRequest)
-		return
-	}
-
-	_, err := database.DB.Exec("UPDATE invoice SET signature = $1 WHERE reference = $2", req.Signature, req.Reference)
-	if err != nil {
-		http.Error(w, "Failed to update invoice", http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-}
-
 func GetContent(w http.ResponseWriter, r *http.Request) {
 	walletAddress := r.URL.Query().Get("walletAddress")
 	if walletAddress == "" {

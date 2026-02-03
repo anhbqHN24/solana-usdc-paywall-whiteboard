@@ -1,15 +1,9 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-import { getUsdcBalance, createUsdcTransfer } from "@/lib/solana";
-import {
-  PublicKey,
-  Connection,
-  clusterApiUrl,
-  ComputeBudgetProgram,
-} from "@solana/web3.js";
+import { getUsdcBalance } from "@/lib/solana";
 import {
   MapPinIcon,
   LockClosedIcon,
@@ -18,19 +12,11 @@ import {
 
 export function Paywall({ children }: { children: React.ReactNode }) {
   const { connection } = useConnection();
-  const { publicKey, sendTransaction } = useWallet();
+  const { publicKey } = useWallet();
   const [usdcBalance, setUsdcBalance] = useState<number | null>(null);
   const [hasAccess, setHasAccess] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    setIsClient(true);
-    const pendingPayment = localStorage.getItem("pending_payment_reference");
-    if (pendingPayment) {
-      setPolling(true);
-    }
-  }, []);
 
   // --- LOGIC BALANCE & POLLING (GIỮ NGUYÊN) ---
   useEffect(() => {
@@ -41,7 +27,6 @@ export function Paywall({ children }: { children: React.ReactNode }) {
         .then((data) => {
           if (data.hasAccess) {
             setHasAccess(true);
-            localStorage.removeItem("pending_payment_reference");
           }
         })
         .catch(() => setHasAccess(false));
@@ -51,109 +36,12 @@ export function Paywall({ children }: { children: React.ReactNode }) {
     }
   }, [publicKey, connection]);
 
-  const [polling, setPolling] = useState(false);
-
   useEffect(() => {
-    if (!publicKey || !polling) return;
+    setIsClient(true);
+  }, []);
 
-    const interval = setInterval(() => {
-      fetch(`/api/content?walletAddress=${publicKey.toBase58()}`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.hasAccess) {
-            setHasAccess(true);
-            setPolling(false);
-            localStorage.removeItem("pending_payment_reference");
-          }
-        });
-    }, 2000);
-
-    const timeout = setTimeout(() => {
-      setPolling(false);
-      localStorage.removeItem("pending_payment_reference");
-      alert("Payment confirmation timed out. Please try again later.");
-      setLoading(false);
-    }, 60000);
-
-    return () => {
-      clearInterval(interval);
-      clearTimeout(timeout);
-    };
-  }, [publicKey, polling]);
-
-  // --- LOGIC THANH TOÁN (GIỮ NGUYÊN) ---
   const handlePayment = async () => {
-    if (!publicKey) return;
-
-    const merchantWallet = process.env.NEXT_PUBLIC_MERCHANT_WALLET;
-    if (!merchantWallet) {
-      alert("Merchant wallet not configured");
-      return;
-    }
-    const rpcUrl =
-      process.env.NEXT_PUBLIC_SOLANA_RPC_URL || clusterApiUrl("devnet");
-    const devnetConnection = new Connection(rpcUrl, "confirmed");
-
-    setLoading(true);
-    try {
-      const res = await fetch("/api/invoice", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ walletAddress: publicKey.toBase58() }),
-      });
-      const { reference } = await res.json();
-      localStorage.setItem("pending_payment_reference", reference);
-
-      const transaction = await createUsdcTransfer(
-        devnetConnection,
-        publicKey,
-        new PublicKey(merchantWallet),
-        10,
-        reference,
-      );
-
-      const addPriorityFee = ComputeBudgetProgram.setComputeUnitPrice({
-        microLamports: 100000,
-      });
-      transaction.instructions.unshift(addPriorityFee);
-
-      const latestBlockhash =
-        await devnetConnection.getLatestBlockhash("confirmed");
-      transaction.recentBlockhash = latestBlockhash.blockhash;
-      transaction.lastValidBlockHeight = latestBlockhash.lastValidBlockHeight;
-
-      console.log("Sending transaction...");
-      const signature = await sendTransaction(transaction, devnetConnection, {
-        skipPreflight: true,
-        maxRetries: 5,
-      });
-
-      console.log("Waiting for confirmation...");
-      const confirmation = await devnetConnection.confirmTransaction(
-        {
-          signature,
-          blockhash: latestBlockhash.blockhash,
-          lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
-        },
-        "confirmed",
-      );
-
-      if (confirmation.value.err) {
-        throw new Error("Transaction failed on-chain! Please try again.");
-      }
-
-      await fetch("/api/invoice/confirm", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reference, signature }),
-      });
-
-      setPolling(true);
-    } catch (error) {
-      console.error("Payment failed", error);
-      alert("Payment failed. Please check console for details.");
-      setLoading(false);
-    }
+    // Insert payment logic here
   };
 
   // --- UI COMPONENTS ---
@@ -267,11 +155,12 @@ export function Paywall({ children }: { children: React.ReactNode }) {
               a downloadable PDF itinerary.
             </p>
 
+            {/* --- CONTENT UNLOCK PRICE */}
             <div className="flex items-center justify-center gap-2 mb-8">
               <span className="text-4xl font-bold text-gray-900">10 USDC</span>
             </div>
 
-            {/* --- PHẦN TƯƠNG TÁC (BUTTONS) --- */}
+            {/* --- INTERACTION (BUTTONS) --- */}
             {!isClient ? (
               <div className="w-full h-12 bg-gray-100 rounded-xl animate-pulse"></div>
             ) : (
