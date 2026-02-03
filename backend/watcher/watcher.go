@@ -15,7 +15,6 @@ import (
 	"time"
 )
 
-// ... (Transaction and Invoice structs remain the same) ...
 // Transaction models the structure of the JSON output from get_transaction.js
 type ParsedInfo struct {
 	Source      string `json:"source"`
@@ -52,7 +51,6 @@ type VerificationData struct {
 }
 
 type Invoice struct {
-	// ... (Invoice struct remains the same) ...
 	ID            int64
 	WalletAddress string
 	Reference     string
@@ -64,7 +62,6 @@ type Invoice struct {
 	LastRetryAt   sql.NullTime
 }
 
-// ... (Start and checkPendingPayments functions remain the same) ...
 func Start() {
 	log.Println("Starting transaction watcher...")
 	go func() {
@@ -78,7 +75,6 @@ func Start() {
 }
 func checkPendingPayments() {
 	// The interval is in seconds, calculated as 2^retry_count, capped at 8 for interval calculation to prevent very long waits.
-	// A base of 10 seconds is added to the interval.
 	rows, err := database.DB.Query(`
 		SELECT id, wallet_address, reference, signature, amount, status, created_at, retry_count, last_retry_at
 		FROM invoice
@@ -133,7 +129,7 @@ func handleTransactionNotFound(invoice Invoice, err error) {
 	if dbErr != nil {
 		log.Printf("Error updating retry count for invoice %d: %v", invoice.ID, dbErr)
 	} else {
-		// Log originalErr để thấy lỗi thực sự từ JS script
+		// Log originalErr to see the actual error return from JS script
 		log.Printf("Transaction not found for invoice %d. Retrying later. Retry attempt %d. Details: %v", invoice.ID, invoice.RetryCount+1, err)
 	}
 }
@@ -157,12 +153,12 @@ func verifyAndCompleteTransaction(invoice Invoice) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	// --- 1. LOGIC MỚI: Check timeout 5 phút ngay từ đầu ---
-	// Nếu thời gian hiện tại - thời gian tạo > 5 phút (cộng thêm chút buffer 10s cho mạng)
+	// --- Check timeout 1 minute (match with timeout duration set on frontend service) ---
+	// Plus Additional 10s to handle network delay
 	if time.Since(invoice.CreatedAt) > 5*time.Minute+10*time.Second {
 		log.Printf("Invoice %d expired (timeout > 5 mins). Marking as failed.", invoice.ID)
 		updateInvoiceStatus(invoice.ID, "failed")
-		return nil // Dừng check, coi như xong
+		return nil
 	}
 
 	cmd := exec.CommandContext(ctx, "node", "watcher/get_transaction.js", invoice.Signature.String, merchantWallet, usdcMint)
@@ -182,16 +178,16 @@ func verifyAndCompleteTransaction(invoice Invoice) error {
 		return fmt.Errorf("error parsing verification data: %w", err)
 	}
 
-	// 1. Kiểm tra lỗi On-Chain
+	// Check onchain transaction error
 	if data.Transaction.Meta.Err != nil {
 		log.Printf("Transaction failed on-chain: %v", data.Transaction.Meta.Err)
 		return errors.New("payment verification failed: transaction failed on-chain")
 	}
 
-	// 1. Verify memo
+	// 1. Verify memo. In this scenario, i'm include 2 ways to do it
 	memoFound := false
 
-	// Cách 1: Tìm trong Log (Cho Memo v2 hoặc program log)
+	// Option 1: Find inside the Log (for Memo v2 or program log)
 	expectedMemoPrefix := "Program log: Memo"
 	for _, msg := range data.Transaction.Meta.LogMessages {
 		if strings.HasPrefix(msg, expectedMemoPrefix) && strings.Contains(msg, invoice.Reference) {
@@ -200,11 +196,11 @@ func verifyAndCompleteTransaction(invoice Invoice) error {
 		}
 	}
 
-	// Cách 2: Tìm trong Instruction Parsed Data (Cho Memo v1 - QUAN TRỌNG)
+	// Option 2: Find inside Instruction Parsed Data (for Memo v1 - what we're using on this case)
 	if !memoFound {
 		for _, inst := range data.Transaction.Transaction.Message.Instructions {
 			if inst.Program == "spl-memo" {
-				// Memo v1: "parsed" field là một string trực tiếp
+				// Memo v1: "parsed" field as a string
 				var memoText string
 				if err := json.Unmarshal(inst.Parsed, &memoText); err == nil {
 					if memoText == invoice.Reference {
@@ -220,12 +216,12 @@ func verifyAndCompleteTransaction(invoice Invoice) error {
 		return fmt.Errorf("payment verification failed: memo '%s' not found", invoice.Reference)
 	}
 
-	// 3. Tìm Instruction Transfer hợp lệ
+	// 3. Find valid Transfer Instruction
 	transferFound := false
 	for _, inst := range data.Transaction.Transaction.Message.Instructions {
-		// Chỉ quan tâm instruction của token program
+		// Only care about token program instructions
 		if inst.Program == "spl-token" {
-			// Parse nội dung instruction object
+			// Parse instruction object content
 			var tokenData SplTokenParsedData
 			if err := json.Unmarshal(inst.Parsed, &tokenData); err != nil {
 				continue
@@ -239,7 +235,7 @@ func verifyAndCompleteTransaction(invoice Invoice) error {
 
 				if tokenData.Info.Authority == merchantWallet {
 					log.Printf("Security Alert: Self-payment detected for invoice %d. Merchant wallet is sender.", invoice.ID)
-					// Đánh dấu failed luôn để chặn gian lận
+					// Mark as failed immediately to prevent fraud
 					updateInvoiceStatus(invoice.ID, "failed")
 					return errors.New("security violation: merchant self-payment not allowed")
 				}

@@ -1,16 +1,14 @@
 "use client";
 
-// SỬA DÒNG NÀY: Đổi WalletProvider -> WalletContextProvider
 import { WalletContextProvider } from "@/components/WalletProvider";
 import { Paywall } from "@/components/Paywall";
 import { CloudArrowDownIcon, CheckBadgeIcon } from "@heroicons/react/24/solid";
 
 export default function Home() {
   return (
-    // SỬA DÒNG NÀY: Dùng WalletContextProvider bao bên ngoài
     <WalletContextProvider>
       <Paywall>
-        {/* Nội dung Premium: Hiển thị sau khi Pay thành công */}
+        {/* Premium Content: Display after sucessful payment */}
         <div className="space-y-8 animate-fade-in">
           {/* Success Message */}
           <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3 text-green-800">
@@ -23,7 +21,7 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Nội dung bài viết tiếp theo */}
+          {/* Premium Content */}
           <div className="prose prose-lg text-gray-700">
             <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
               <span className="bg-rose-100 text-rose-600 w-8 h-8 rounded-full flex items-center justify-center text-sm">

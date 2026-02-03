@@ -9,6 +9,7 @@ A premium travel guide platform powered by Solana blockchain. Users pay **10 USD
 ## 🚀 Features
 
 ### Core Payment Flow (Phase 1-3)
+- **✨ Init UI:** "Wanderlust Guides" theme - Clean, modern, light-mode travel blog interface.
 - **Direct USDC Payment:** Users pay directly from their Phantom/Solflare wallet to the Merchant wallet.
 - **On-Chain Verification:** Backend verifies transactions directly on the Solana blockchain (Signature & Memo).
 - **Secure Access:** Content is unlocked only after successful payment verification.
@@ -18,7 +19,6 @@ A premium travel guide platform powered by Solana blockchain. Users pay **10 USD
 - **⏳ 5-Minute Payment Window:** Countdown timer ensures payment sessions expire to prevent stale transactions.
 - **🔄 Smart Recheck Mechanism:** Users can manually trigger a status check if the websocket/polling misses the confirmation.
 - **🛡️ Rate Limiting:** Backend protects the verification API from spam (5 requests/minute/IP).
-- **✨ Polished UI:** "Wanderlust Guides" theme - Clean, modern, light-mode travel blog interface.
 - **⚡ High Performance:** Optimistic UI updates and Priority Fees ensuring fast transaction processing on Solana.
 
 ## 🛠 Tech Stack
@@ -79,6 +79,9 @@ cp .env.example .env
 # USDC_MINT=4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU (Devnet USDC)
 # SOLANA_RPC_URL=[https://api.devnet.solana.com](https://api.devnet.solana.com)
 
+# Migrate database using makefile command (view Makefile within /backend to see more command)
+make migrate-up
+
 # Start the Server
 go run main.go
 Server runs on http://localhost:8080
@@ -94,6 +97,7 @@ npm install
 # Configure Environment Variables
 cp .env.local.example .env.local
 # Edit .env.local:
+# NEXT_PUBLIC_SOLANA_RPC_URL=<Solana_RPC_URL>
 # NEXT_PUBLIC_MERCHANT_WALLET=<Same_Wallet_As_Backend>
 # NEXT_PUBLIC_SOLANA_RPC_URL=[https://api.devnet.solana.com](https://api.devnet.solana.com)
 
