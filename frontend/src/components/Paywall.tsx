@@ -13,7 +13,6 @@ import {
 import {
   MapPinIcon,
   LockClosedIcon,
-  CloudArrowDownIcon,
   StarIcon,
 } from "@heroicons/react/24/solid";
 
@@ -25,17 +24,6 @@ export function Paywall({ children }: { children: React.ReactNode }) {
   const [isClient, setIsClient] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // --- LOGIC TIMER (GIỮ NGUYÊN TỪ CODE CŨ) ---
-  const [timeLeft, setTimeLeft] = useState<number | null>(null);
-  const [isExpired, setIsExpired] = useState(false);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-  };
-
   useEffect(() => {
     setIsClient(true);
     const pendingPayment = localStorage.getItem("pending_payment_reference");
@@ -43,70 +31,6 @@ export function Paywall({ children }: { children: React.ReactNode }) {
       setPolling(true);
     }
   }, []);
-
-  useEffect(() => {
-    const pendingPayment = localStorage.getItem("pending_payment_reference");
-    const expiryTimestamp = localStorage.getItem("payment_expiry_timestamp");
-
-    if (pendingPayment) {
-      if (expiryTimestamp) {
-        const remaining = Math.floor(
-          (parseInt(expiryTimestamp) - Date.now()) / 1000,
-        );
-        if (remaining > 0) {
-          setTimeLeft(remaining);
-          setPolling(true);
-        } else {
-          handleExpire();
-        }
-      } else {
-        startNewTimer();
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    if (timeLeft === null || timeLeft <= 0) {
-      if (timeLeft === 0) handleExpire();
-      return;
-    }
-    timerRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev === null || prev <= 1) {
-          clearInterval(timerRef.current!);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [timeLeft]);
-
-  const startNewTimer = () => {
-    const duration = 5 * 60;
-    const expiry = Date.now() + duration * 1000;
-    setTimeLeft(duration);
-    setIsExpired(false);
-    localStorage.setItem("payment_expiry_timestamp", expiry.toString());
-  };
-
-  const handleExpire = () => {
-    setIsExpired(true);
-    setPolling(false);
-    setLoading(false);
-    localStorage.removeItem("pending_payment_reference");
-    localStorage.removeItem("payment_expiry_timestamp");
-  };
-
-  const resetPayment = () => {
-    setIsExpired(false);
-    setTimeLeft(null);
-    setLoading(false);
-    localStorage.removeItem("pending_payment_reference");
-    localStorage.removeItem("payment_expiry_timestamp");
-  };
 
   // --- LOGIC BALANCE & POLLING (GIỮ NGUYÊN) ---
   useEffect(() => {
@@ -148,7 +72,7 @@ export function Paywall({ children }: { children: React.ReactNode }) {
       setPolling(false);
       localStorage.removeItem("pending_payment_reference");
       alert("Payment confirmation timed out. Please try again later.");
-      resetPayment();
+      setLoading(false);
     }, 60000);
 
     return () => {
@@ -170,7 +94,6 @@ export function Paywall({ children }: { children: React.ReactNode }) {
       process.env.NEXT_PUBLIC_SOLANA_RPC_URL || clusterApiUrl("devnet");
     const devnetConnection = new Connection(rpcUrl, "confirmed");
 
-    startNewTimer();
     setLoading(true);
     try {
       const res = await fetch("/api/invoice", {
@@ -229,38 +152,7 @@ export function Paywall({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error("Payment failed", error);
       alert("Payment failed. Please check console for details.");
-      resetPayment();
-    }
-  };
-
-  const handleRecheck = async () => {
-    const pendingRef = localStorage.getItem("pending_payment_reference");
-    if (!pendingRef) {
-      alert("No pending payment found to check.");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const res = await fetch("/api/recheck", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reference: pendingRef }),
-      });
-      const data = await res.json();
-
-      if (data.status === "paid") {
-        setHasAccess(true);
-        localStorage.removeItem("pending_payment_reference");
-        alert("Payment confirmed! Access granted.");
-      } else {
-        alert("Payment still pending or not found.");
-      }
-    } catch (error) {
-      console.error("Recheck failed", error);
-      alert("Error checking payment status.");
-    } finally {
-      resetPayment();
+      setLoading(false);
     }
   };
 
@@ -375,7 +267,6 @@ export function Paywall({ children }: { children: React.ReactNode }) {
               a downloadable PDF itinerary.
             </p>
 
-            {/* Pricing Display */}
             <div className="flex items-center justify-center gap-2 mb-8">
               <span className="text-4xl font-bold text-gray-900">10 USDC</span>
             </div>
@@ -394,37 +285,15 @@ export function Paywall({ children }: { children: React.ReactNode }) {
                       <WalletMultiButton className="!bg-rose-600 hover:!bg-rose-700 !w-full !justify-center" />
                     </div>
                   </div>
-                ) : isExpired ? (
-                  <div className="bg-red-50 text-red-600 p-4 rounded-xl border border-red-100">
-                    <p className="font-bold">Session Expired</p>
-                    <p className="text-sm mb-3">
-                      The 5-minute payment window has closed.
-                    </p>
-                    <button
-                      onClick={resetPayment}
-                      className="text-sm underline hover:text-red-800 font-medium"
-                    >
-                      Try again
-                    </button>
-                  </div>
                 ) : (
-                  <div className="space-y-3">
-                    {/* Timer Display */}
-                    {timeLeft !== null && (
-                      <div
-                        className={`text-xs font-mono font-medium py-1 px-3 rounded-full inline-block mb-2 ${timeLeft < 60 ? "bg-red-50 text-red-500 animate-pulse" : "bg-rose-50 text-rose-500"}`}
-                      >
-                        Rate expires in: {formatTime(timeLeft)}
-                      </div>
-                    )}
-
+                  <>
                     {/* Pay Button */}
                     <button
                       onClick={handlePayment}
-                      disabled={loading || (timeLeft !== null && timeLeft > 0)}
+                      disabled={loading}
                       className="w-full py-3.5 rounded-xl bg-gray-900 text-white font-bold hover:bg-gray-800 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
                     >
-                      {loading || (timeLeft !== null && timeLeft > 0) ? (
+                      {loading ? (
                         <>
                           <svg
                             className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
@@ -449,23 +318,13 @@ export function Paywall({ children }: { children: React.ReactNode }) {
                           Processing...
                         </>
                       ) : (
-                        "Unlock Now"
+                        "Unlock Content"
                       )}
                     </button>
-
-                    {/* Recheck Link */}
-                    <button
-                      onClick={handleRecheck}
-                      disabled={loading}
-                      className="text-xs text-gray-400 hover:text-gray-600 underline"
-                    >
-                      I already paid? Check status
-                    </button>
-                  </div>
+                  </>
                 )}
               </>
             )}
-
             <p className="text-xs text-gray-400 mt-6 flex items-center justify-center gap-1">
               Powered by Solana{" "}
               <span className="w-1 h-1 bg-gray-300 rounded-full"></span> Instant
@@ -474,6 +333,18 @@ export function Paywall({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </main>
+      {/* USDC Devnet Airdrop */}
+      <div className="fixed bottom-4 right-4 bg-gray-800 text-white p-3 rounded-lg shadow-lg text-sm">
+        <p>Need Devnet USDC?</p>
+        <a
+          href="https://faucet.circle.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-400 hover:underline"
+        >
+          Visit Circle's Faucet
+        </a>
+      </div>
     </div>
   );
 }

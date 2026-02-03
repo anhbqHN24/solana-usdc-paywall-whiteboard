@@ -75,39 +75,7 @@ func Start() {
 			checkPendingPayments()
 		}
 	}()
-	// --- THÊM ROUTINE 2: Dọn dẹp Invoice rác (Garbage Collector) ---
-	go func() {
-		// Chạy mỗi 5 phút một lần
-		cleanupTicker := time.NewTicker(5 * time.Minute)
-		defer cleanupTicker.Stop()
-		for range cleanupTicker.C {
-			cleanupExpiredInvoices()
-		}
-	}()
 }
-
-// Hàm thực hiện việc dọn dẹp
-func cleanupExpiredInvoices() {
-	// Logic: Tìm tất cả invoice 'pending' đã tạo quá 30 phút -> Chuyển thành 'expired'
-	// Interval '30 minutes' là thời gian an toàn để user thao tác
-	result, err := database.DB.Exec(`
-        UPDATE invoice 
-        SET status = 'expired' 
-        WHERE status = 'pending' 
-        AND created_at < NOW() - INTERVAL '30 minutes'
-    `)
-
-	if err != nil {
-		log.Printf("Error cleaning up expired invoices: %v", err)
-		return
-	}
-
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected > 0 {
-		log.Printf("Garbage Collector: Cleaned up %d expired invoices.", rowsAffected)
-	}
-}
-
 func checkPendingPayments() {
 	// The interval is in seconds, calculated as 2^retry_count, capped at 8 for interval calculation to prevent very long waits.
 	// A base of 10 seconds is added to the interval.
@@ -295,46 +263,4 @@ func verifyAndCompleteTransaction(invoice Invoice) error {
 	updateInvoiceStatus(invoice.ID, "paid")
 	log.Printf("Payment confirmed for invoice %d", invoice.ID)
 	return nil
-}
-
-// ForceRecheckByReference cho phép API trigger việc kiểm tra lại một invoice cụ thể
-func ForceRecheckByReference(reference string) (string, error) {
-	// 1. Tìm invoice từ reference
-	var invoice Invoice
-	err := database.DB.QueryRow(`
-		SELECT id, wallet_address, reference, signature, amount, status, created_at, retry_count, last_retry_at
-		FROM invoice WHERE reference = $1
-	`, reference).Scan(&invoice.ID, &invoice.WalletAddress, &invoice.Reference, &invoice.Signature, &invoice.Amount, &invoice.Status, &invoice.CreatedAt, &invoice.RetryCount, &invoice.LastRetryAt)
-
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return "", errors.New("invoice not found")
-		}
-		return "", err
-	}
-
-	// 2. Nếu đã paid rồi thì báo luôn
-	if invoice.Status == "paid" {
-		return "paid", nil
-	}
-
-	// 3. Nếu chưa có signature (chưa gửi tx) thì không check được
-	if !invoice.Signature.Valid || invoice.Signature.String == "" {
-		return "pending", nil
-	}
-
-	// 4. Thử verify lại transaction
-	// Lưu ý: Hàm verifyAndCompleteTransaction là hàm nội bộ, bạn có thể gọi nó ở đây
-	err = verifyAndCompleteTransaction(invoice)
-	if err != nil {
-		// Log lỗi nhưng không return lỗi ra API, chỉ báo trạng thái hiện tại
-		log.Printf("Manual recheck failed for ref %s: %v", reference, err)
-
-		// Check lại status lần cuối xem hàm verify có update thành công không
-		var newStatus string
-		_ = database.DB.QueryRow("SELECT status FROM invoice WHERE id = $1", invoice.ID).Scan(&newStatus)
-		return newStatus, nil
-	}
-
-	return "paid", nil
 }
