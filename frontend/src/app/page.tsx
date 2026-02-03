@@ -1,6 +1,5 @@
 "use client";
 
-// SỬA DÒNG NÀY: Đổi WalletProvider -> WalletContextProvider
 import { WalletContextProvider } from "@/components/WalletProvider";
 import { Paywall } from "@/components/Paywall";
 import { CloudArrowDownIcon, CheckBadgeIcon } from "@heroicons/react/24/solid";
