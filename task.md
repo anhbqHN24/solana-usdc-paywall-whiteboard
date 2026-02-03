@@ -7,21 +7,21 @@
 - [x] **Display State**: Show wallet address and balance when connected.
 
 ## Phase 2: Protected paywall
-- [] **Database Schema**: Create `paid_wallet` and `invoice` tables in PostgreSQL.
-- [] **Backend Setup**: Initialize Go server and DB connection.
-- [] **API Endpoint**: Implement `GET /api/content` to check payment status.
-- [] **Frontend Integration**: Call API to check access and show locked/unlocked state.
+- [ ] **Database Schema**: Create `paid_wallet` and `invoice` tables in PostgreSQL.
+- [ ] **Backend Setup**: Initialize Go server and DB connection.
+- [ ] **API Endpoint**: Implement `GET /api/content` to check payment status.
+- [ ] **Frontend Integration**: Call API to check access and show locked/unlocked state.
 
 ## Phase 3: Pay with USDC
-- [] **Backend Invoice**: Implement `POST /api/invoice` to generate payment intent.
-- [] **Transaction Watcher**: Create background worker to monitor blockchain for payments.
-- [] **Frontend Payment**: Create and sign USDC transfer transaction with memo.
-- [] **Polling**: Implement frontend polling for payment confirmation.
-- [] **State Persistence**: Handle page refreshes and transaction storage.
+- [ ] **Backend Invoice**: Implement `POST /api/invoice` to generate payment intent.
+- [ ] **Transaction Watcher**: Create background worker to monitor blockchain for payments.
+- [ ] **Frontend Payment**: Create and sign USDC transfer transaction with memo.
+- [ ] **Polling**: Implement frontend polling for payment confirmation.
+- [ ] **State Persistence**: Handle page refreshes and transaction storage.
 
 ## Phase 4: Polishing the app
-- [] **Recheck Flow**: Implement `POST /api/recheck` for manual payment validation.
-- [] **Frontend Polish**: Add "Recheck Payment" button and improve error handling.
-- [] **Edge Cases**: Handle double payments, invalid memos, and timeouts.
-- [] **Rate Limiting**: Protect recheck endpoint.
-- [] **Testing**: Verify all flows on Devnet.
+- [ ] **Recheck Flow**: Implement `POST /api/recheck` for manual payment validation.
+- [ ] **Frontend Polish**: Add "Recheck Payment" button and improve error handling.
+- [ ] **Edge Cases**: Handle double payments, invalid memos, and timeouts.
+- [ ] **Rate Limiting**: Protect recheck endpoint.
+- [ ] **Testing**: Verify all flows on Devnet.
