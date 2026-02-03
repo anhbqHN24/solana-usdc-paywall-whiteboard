@@ -16,6 +16,7 @@ func main() {
 	http.HandleFunc("/api/content", api.GetContent)
 	http.HandleFunc("/api/invoice", api.CreateInvoice)
 	http.HandleFunc("/api/invoice/confirm", api.ConfirmInvoice)
+	// Add recheck payment api /w ratelimit protection middleware
 	http.HandleFunc("/api/recheck", middleware.RateLimit(api.RecheckPayment))
 
 	log.Println("Server starting on port 8080...")

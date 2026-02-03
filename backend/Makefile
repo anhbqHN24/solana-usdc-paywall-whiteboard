@@ -1,17 +1,17 @@
-# Nạp file .env
+# Load file .env
 ifneq (,$(wildcard ./.env))
     include .env
     export
 endif
 
-# Lệnh chạy Up
+# Run Up command
 migrate-up:
 	migrate -path migrations -database $(DATABASE_URL) up
 
-# Lệnh chạy Down 1 bước
+# Run Down 1 step command
 migrate-down:
 	migrate -path migrations -database $(DATABASE_URL) down 1
 
-# Lệnh tạo file migration mới (VD: make migrate-create name=add_users_table)
+# Command to create new migration file (Ex: make migrate-create name=add_users_table)
 migrate-create:
 	migrate create -ext sql -dir migrations -seq $(name)

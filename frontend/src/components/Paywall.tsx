@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import dynamic from "next/dynamic";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { getUsdcBalance, createUsdcTransfer } from "@/lib/solana";
@@ -13,7 +14,6 @@ import {
 import {
   MapPinIcon,
   LockClosedIcon,
-  CloudArrowDownIcon,
   StarIcon,
 } from "@heroicons/react/24/solid";
 
@@ -22,10 +22,10 @@ export function Paywall({ children }: { children: React.ReactNode }) {
   const { publicKey, sendTransaction } = useWallet();
   const [usdcBalance, setUsdcBalance] = useState<number | null>(null);
   const [hasAccess, setHasAccess] = useState(false);
-  const [isClient, setIsClient] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [polling, setPolling] = useState(false);
 
-  // --- LOGIC TIMER (GIỮ NGUYÊN TỪ CODE CŨ) ---
+  // --- LOGIC TIMER ---
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [isExpired, setIsExpired] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -37,7 +37,6 @@ export function Paywall({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    setIsClient(true);
     const pendingPayment = localStorage.getItem("pending_payment_reference");
     if (pendingPayment) {
       setPolling(true);
@@ -108,7 +107,7 @@ export function Paywall({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("payment_expiry_timestamp");
   };
 
-  // --- LOGIC BALANCE & POLLING (GIỮ NGUYÊN) ---
+  // --- LOGIC GET WALLET USDC BALANCE & CHECK ACCESS RIGHT ---
   useEffect(() => {
     if (publicKey) {
       getUsdcBalance(connection, publicKey).then(setUsdcBalance);
@@ -127,8 +126,7 @@ export function Paywall({ children }: { children: React.ReactNode }) {
     }
   }, [publicKey, connection]);
 
-  const [polling, setPolling] = useState(false);
-
+  // --- LOGIC CHECK ACCESS RIGHT /W POLLING ---
   useEffect(() => {
     if (!publicKey || !polling) return;
 
@@ -157,7 +155,7 @@ export function Paywall({ children }: { children: React.ReactNode }) {
     };
   }, [publicKey, polling]);
 
-  // --- LOGIC THANH TOÁN (GIỮ NGUYÊN) ---
+  // --- PAYMENT LOGIC ---
   const handlePayment = async () => {
     if (!publicKey) return;
 
@@ -233,6 +231,7 @@ export function Paywall({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // --- RECHECK WALLET PAYMENT STATUS LOGIC ---
   const handleRecheck = async () => {
     const pendingRef = localStorage.getItem("pending_payment_reference");
     if (!pendingRef) {
@@ -276,29 +275,25 @@ export function Paywall({ children }: { children: React.ReactNode }) {
           </span>
         </div>
         <div className="flex items-center gap-4">
-          {/* Chỉ hiển thị số dư khi đã load xong client */}
-          {isClient && publicKey && usdcBalance !== null && (
+          {/* Only display balance after establish connection with wallet */}
+          {publicKey && usdcBalance !== null && (
             <span className="hidden sm:block text-sm text-gray-500 font-mono bg-gray-50 px-2 py-1 rounded">
               {usdcBalance.toFixed(2)} USDC
             </span>
           )}
 
-          {/* --- SỬA LỖI Ở ĐÂY --- */}
-          {/* Chỉ render nút Ví khi isClient = true để tránh lỗi Hydration */}
-          {isClient && (
-            <WalletMultiButton className="!bg-gray-900 hover:!bg-gray-800 !h-9 !px-4 !text-sm !font-medium !rounded-full" />
-          )}
+          <WalletMultiButton className="!bg-gray-900 hover:!bg-gray-800 !h-9 !px-4 !text-sm !font-medium !rounded-full" />
         </div>
       </div>
     </nav>
   );
 
-  // --- CASE 1: ĐÃ MUA -> HIỆN FULL BÀI VIẾT (CHILDREN) ---
+  // --- CASE 1: DONE PURCHASE -> DISPLAY FULL PREMIUM CONTENT (CHILDREN) ---
   if (hasAccess) {
     return (
       <div className="min-h-screen bg-white">
         <Navbar />
-        {/* Nội dung Premium */}
+        {/* Premium Content */}
         <main className="max-w-3xl mx-auto px-4 py-8 animate-fade-in">
           {children}
         </main>
@@ -306,13 +301,13 @@ export function Paywall({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // --- CASE 2: CHƯA MUA -> HIỆN PAYWALL ---
+  // --- CASE 2: NOT PURCHASE YET -> VIEW PAYWALL ---
   return (
     <div className="min-h-screen bg-white flex flex-col font-sans">
       <Navbar />
 
       <main className="flex-grow max-w-3xl mx-auto px-4 py-12 w-full">
-        {/* Header Bài Viết */}
+        {/* News Header */}
         <div className="space-y-4 mb-8">
           <span className="text-rose-600 font-bold text-sm tracking-wider uppercase flex items-center gap-2">
             <StarIcon className="w-4 h-4" /> Premium Guide
@@ -330,7 +325,7 @@ export function Paywall({ children }: { children: React.ReactNode }) {
           </div>
         </div>
 
-        {/* Nội dung Public (Teaser) */}
+        {/* News Public Content (Teaser) */}
         <article className="prose prose-lg text-gray-600 leading-relaxed">
           <p>
             Kyoto is arguably the most beautiful city in Japan, but most
@@ -338,12 +333,11 @@ export function Paywall({ children }: { children: React.ReactNode }) {
             While those are breathtaking, they are also incredibly crowded.
           </p>
           <p>
-            After living in Kyoto for 3 years, I’ve discovered a collection of
+            After living in Kyoto for 3 years, I've discovered a collection of
             secret temples, quiet bamboo groves, and artisanal tea houses that
             aren't on Google Maps.
           </p>
 
-          {/* Ảnh minh họa */}
           <div className="my-8 rounded-xl overflow-hidden bg-gray-100 h-64 md:h-80 w-full relative group shadow-sm">
             <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent flex items-end p-6">
               <span className="text-white font-medium flex items-center gap-2">
@@ -380,90 +374,84 @@ export function Paywall({ children }: { children: React.ReactNode }) {
               <span className="text-4xl font-bold text-gray-900">10 USDC</span>
             </div>
 
-            {/* --- PHẦN TƯƠNG TÁC (BUTTONS) --- */}
-            {!isClient ? (
-              <div className="w-full h-12 bg-gray-100 rounded-xl animate-pulse"></div>
+            {/* --- INTERACTION (BUTTONS) --- */}
+            {!publicKey ? (
+              <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
+                <p className="text-sm text-gray-600 mb-3">
+                  Connect your wallet to purchase
+                </p>
+                <div className="flex justify-center">
+                  <WalletMultiButton className="!bg-rose-600 hover:!bg-rose-700 !w-full !justify-center" />
+                </div>
+              </div>
+            ) : isExpired ? (
+              <div className="bg-red-50 text-red-600 p-4 rounded-xl border border-red-100">
+                <p className="font-bold">Session Expired</p>
+                <p className="text-sm mb-3">
+                  The 5-minute payment window has closed.
+                </p>
+                <button
+                  onClick={resetPayment}
+                  className="text-sm underline hover:text-red-800 font-medium"
+                >
+                  Try again
+                </button>
+              </div>
             ) : (
-              <>
-                {!publicKey ? (
-                  <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-                    <p className="text-sm text-gray-600 mb-3">
-                      Connect your wallet to purchase
-                    </p>
-                    <div className="flex justify-center">
-                      <WalletMultiButton className="!bg-rose-600 hover:!bg-rose-700 !w-full !justify-center" />
-                    </div>
-                  </div>
-                ) : isExpired ? (
-                  <div className="bg-red-50 text-red-600 p-4 rounded-xl border border-red-100">
-                    <p className="font-bold">Session Expired</p>
-                    <p className="text-sm mb-3">
-                      The 5-minute payment window has closed.
-                    </p>
-                    <button
-                      onClick={resetPayment}
-                      className="text-sm underline hover:text-red-800 font-medium"
-                    >
-                      Try again
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {/* Timer Display */}
-                    {timeLeft !== null && (
-                      <div
-                        className={`text-xs font-mono font-medium py-1 px-3 rounded-full inline-block mb-2 ${timeLeft < 60 ? "bg-red-50 text-red-500 animate-pulse" : "bg-rose-50 text-rose-500"}`}
-                      >
-                        Rate expires in: {formatTime(timeLeft)}
-                      </div>
-                    )}
-
-                    {/* Pay Button */}
-                    <button
-                      onClick={handlePayment}
-                      disabled={loading || (timeLeft !== null && timeLeft > 0)}
-                      className="w-full py-3.5 rounded-xl bg-gray-900 text-white font-bold hover:bg-gray-800 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
-                    >
-                      {loading || (timeLeft !== null && timeLeft > 0) ? (
-                        <>
-                          <svg
-                            className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                          >
-                            <circle
-                              className="opacity-25"
-                              cx="12"
-                              cy="12"
-                              r="10"
-                              stroke="currentColor"
-                              strokeWidth="4"
-                            ></circle>
-                            <path
-                              className="opacity-75"
-                              fill="currentColor"
-                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                            ></path>
-                          </svg>
-                          Processing...
-                        </>
-                      ) : (
-                        "Unlock Now"
-                      )}
-                    </button>
-
-                    {/* Recheck Link */}
-                    <button
-                      onClick={handleRecheck}
-                      disabled={loading}
-                      className="text-xs text-gray-400 hover:text-gray-600 underline"
-                    >
-                      I already paid? Check status
-                    </button>
+              <div className="space-y-3">
+                {/* Timer Display */}
+                {timeLeft !== null && (
+                  <div
+                    className={`text-xs font-mono font-medium py-1 px-3 rounded-full inline-block mb-2 ${timeLeft < 60 ? "bg-red-50 text-red-500 animate-pulse" : "bg-rose-50 text-rose-500"}`}
+                  >
+                    Rate expires in: {formatTime(timeLeft)}
                   </div>
                 )}
-              </>
+
+                {/* Pay Button */}
+                <button
+                  onClick={handlePayment}
+                  disabled={loading || (timeLeft !== null && timeLeft > 0)}
+                  className="w-full py-3.5 rounded-xl bg-gray-900 text-white font-bold hover:bg-gray-800 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+                >
+                  {loading || (timeLeft !== null && timeLeft > 0) ? (
+                    <>
+                      <svg
+                        className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                      Processing...
+                    </>
+                  ) : (
+                    "Unlock Now"
+                  )}
+                </button>
+
+                {/* Recheck Link */}
+                <button
+                  onClick={handleRecheck}
+                  disabled={loading}
+                  className="text-xs text-gray-400 hover:text-gray-600 underline"
+                >
+                  I already paid? Check status
+                </button>
+              </div>
             )}
 
             <p className="text-xs text-gray-400 mt-6 flex items-center justify-center gap-1">

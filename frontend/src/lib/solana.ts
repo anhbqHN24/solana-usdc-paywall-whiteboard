@@ -12,8 +12,6 @@ import {
 
 // ----------------------------------------------------------------------
 // NOTE: Ensure this is the correct USDC Mint address.
-// The standard Circle USDC Devnet mint is often:
-// '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU'
 // ----------------------------------------------------------------------
 export const USDC_MINT_ADDRESS = new PublicKey(
   process.env.NEXT_PUBLIC_USDC_MINT ||
@@ -46,7 +44,6 @@ export async function getUsdcBalance(
     const account = await getAccount(connection, ata);
     return Number(account.amount) / 1_000_000;
   } catch (error) {
-    // SỬA Ở ĐÂY: Thay vì return null, hãy return 0
     console.warn("Could not fetch USDC balance (likely no account):", error);
     return 0;
   }
