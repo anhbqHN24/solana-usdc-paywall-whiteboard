@@ -1,34 +1,51 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { getUsdcBalance, createUsdcTransfer } from "@/lib/solana";
-import {
-  PublicKey,
-  Connection,
-  clusterApiUrl,
-  ComputeBudgetProgram,
-} from "@solana/web3.js";
+import { PublicKey, ComputeBudgetProgram } from "@solana/web3.js";
 import {
   MapPinIcon,
   LockClosedIcon,
   StarIcon,
 } from "@heroicons/react/24/solid";
 
+const WalletMultiButton = dynamic(
+  () =>
+    import("@solana/wallet-adapter-react-ui").then(
+      (mod) => mod.WalletMultiButton,
+    ),
+  { ssr: false },
+);
+
+// --- NEW: UNIFIED PAYMENT STATE ---
+type PaymentState =
+  | "idle"
+  | "creating_invoice"
+  | "sending_transaction"
+  | "confirming_transaction"
+  | "waiting_for_backend"
+  | "confirmed"
+  | "error"
+  | "expired";
+
+const paymentStatusMessages: { [key in PaymentState]?: string } = {
+  creating_invoice: "Initializing...",
+  sending_transaction: "Approve in wallet...",
+  confirming_transaction: "Finalizing...",
+  waiting_for_backend: "Verifying payment...",
+};
+
 export function Paywall({ children }: { children: React.ReactNode }) {
   const { connection } = useConnection();
   const { publicKey, sendTransaction } = useWallet();
   const [usdcBalance, setUsdcBalance] = useState<number | null>(null);
   const [hasAccess, setHasAccess] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [polling, setPolling] = useState(false);
+  const [paymentState, setPaymentState] = useState<PaymentState>("idle");
 
-  // --- LOGIC TIMER ---
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
-  const [isExpired, setIsExpired] = useState(false);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -36,126 +53,112 @@ export function Paywall({ children }: { children: React.ReactNode }) {
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
 
-  useEffect(() => {
-    const pendingPayment = localStorage.getItem("pending_payment_reference");
-    if (pendingPayment) {
-      setPolling(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    const pendingPayment = localStorage.getItem("pending_payment_reference");
-    const expiryTimestamp = localStorage.getItem("payment_expiry_timestamp");
-
-    if (pendingPayment) {
-      if (expiryTimestamp) {
-        const remaining = Math.floor(
-          (parseInt(expiryTimestamp) - Date.now()) / 1000,
-        );
-        if (remaining > 0) {
-          setTimeLeft(remaining);
-          setPolling(true);
-        } else {
-          handleExpire();
-        }
-      } else {
-        startNewTimer();
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    if (timeLeft === null || timeLeft <= 0) {
-      if (timeLeft === 0) handleExpire();
-      return;
-    }
-    timerRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev === null || prev <= 1) {
-          clearInterval(timerRef.current!);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [timeLeft]);
-
   const startNewTimer = () => {
     const duration = 5 * 60;
     const expiry = Date.now() + duration * 1000;
     setTimeLeft(duration);
-    setIsExpired(false);
     localStorage.setItem("payment_expiry_timestamp", expiry.toString());
   };
 
-  const handleExpire = () => {
-    setIsExpired(true);
-    setPolling(false);
-    setLoading(false);
+  const resetPaymentState = () => {
+    setPaymentState("idle");
+    setTimeLeft(null);
     localStorage.removeItem("pending_payment_reference");
     localStorage.removeItem("payment_expiry_timestamp");
   };
 
-  const resetPayment = () => {
-    setIsExpired(false);
-    setTimeLeft(null);
-    setLoading(false);
-    localStorage.removeItem("pending_payment_reference");
-    localStorage.removeItem("payment_expiry_timestamp");
-  };
+  const refreshAccess = useCallback(async (walletAddress: string) => {
+    const res = await fetch(`/api/content?walletAddress=${walletAddress}`);
+    if (!res.ok) {
+      setHasAccess(false);
+      return false;
+    }
+
+    const data = await res.json();
+    const granted = Boolean(data.hasAccess);
+    setHasAccess(granted);
+    return granted;
+  }, []);
 
   // --- LOGIC GET WALLET USDC BALANCE & CHECK ACCESS RIGHT ---
   useEffect(() => {
     if (publicKey) {
       getUsdcBalance(connection, publicKey).then(setUsdcBalance);
-      fetch(`/api/content?walletAddress=${publicKey.toBase58()}`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.hasAccess) {
-            setHasAccess(true);
+      (async () => {
+        try {
+          const granted = await refreshAccess(publicKey.toBase58());
+          if (granted) {
+            setPaymentState("confirmed");
             localStorage.removeItem("pending_payment_reference");
           }
-        })
-        .catch(() => setHasAccess(false));
+        } catch {
+          setHasAccess(false);
+        }
+      })();
     } else {
       setUsdcBalance(null);
       setHasAccess(false);
     }
-  }, [publicKey, connection]);
+  }, [publicKey, connection, refreshAccess]);
 
-  // --- LOGIC CHECK ACCESS RIGHT /W POLLING ---
+  // --- FIX: TIMER LOGIC ---
   useEffect(() => {
-    if (!publicKey || !polling) return;
+    if (timeLeft === null || paymentState === "idle") return;
 
-    const interval = setInterval(() => {
-      fetch(`/api/content?walletAddress=${publicKey.toBase58()}`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.hasAccess) {
-            setHasAccess(true);
-            setPolling(false);
-            localStorage.removeItem("pending_payment_reference");
-          }
-        });
-    }, 2000);
+    if (timeLeft === 0) {
+      setPaymentState("expired");
+      return;
+    }
 
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => (prev ? prev - 1 : 0));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [timeLeft, paymentState]);
+
+  // --- POLLING LOGIC FOR AMBIGUOUS STATES ---
+  useEffect(() => {
+    if (paymentState !== "waiting_for_backend" || !publicKey) {
+      return;
+    }
+
+    const checkStatus = async () => {
+      const granted = await refreshAccess(publicKey.toBase58());
+      if (granted) {
+        setPaymentState("confirmed");
+        getUsdcBalance(connection, publicKey).then(setUsdcBalance);
+      }
+    };
+
+    // Start polling immediately and then every 3 seconds
+    checkStatus();
+    pollIntervalRef.current = setInterval(checkStatus, 3000);
+
+    // Stop polling after 60 seconds
     const timeout = setTimeout(() => {
-      setPolling(false);
-      localStorage.removeItem("pending_payment_reference");
-      alert("Payment confirmation timed out. Please try again later.");
-      resetPayment();
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+      // --- FIX: IMPROVE TIMEOUT MESSAGE ---
+      if (paymentState === "waiting_for_backend") {
+        setPaymentState("error");
+        alert(
+          "Confirmation is taking longer than expected. Your transaction is likely safe on-chain. Please click 'I already paid' in a minute to re-check.",
+        );
+      }
     }, 60000);
 
     return () => {
-      clearInterval(interval);
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
       clearTimeout(timeout);
     };
-  }, [publicKey, polling]);
+  }, [paymentState, publicKey, connection, refreshAccess]);
 
-  // --- PAYMENT LOGIC ---
+  // --- REFACTORED PAYMENT LOGIC ---
   const handlePayment = async () => {
     if (!publicKey) return;
 
@@ -164,23 +167,27 @@ export function Paywall({ children }: { children: React.ReactNode }) {
       alert("Merchant wallet not configured");
       return;
     }
-    const rpcUrl =
-      process.env.NEXT_PUBLIC_SOLANA_RPC_URL || clusterApiUrl("devnet");
-    const devnetConnection = new Connection(rpcUrl, "confirmed");
 
+    setPaymentState("creating_invoice");
     startNewTimer();
-    setLoading(true);
+
     try {
+      // 1. Create invoice on backend to get a reference
       const res = await fetch("/api/invoice", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ walletAddress: publicKey.toBase58() }),
       });
+      if (!res.ok) {
+        throw new Error("Unable to create invoice");
+      }
       const { reference } = await res.json();
       localStorage.setItem("pending_payment_reference", reference);
 
+      // 2. Create and send the transaction
+      setPaymentState("sending_transaction");
       const transaction = await createUsdcTransfer(
-        devnetConnection,
+        connection,
         publicKey,
         new PublicKey(merchantWallet),
         10,
@@ -192,19 +199,18 @@ export function Paywall({ children }: { children: React.ReactNode }) {
       });
       transaction.instructions.unshift(addPriorityFee);
 
-      const latestBlockhash =
-        await devnetConnection.getLatestBlockhash("confirmed");
+      transaction.feePayer = publicKey;
+      const latestBlockhash = await connection.getLatestBlockhash("confirmed");
       transaction.recentBlockhash = latestBlockhash.blockhash;
       transaction.lastValidBlockHeight = latestBlockhash.lastValidBlockHeight;
 
-      console.log("Sending transaction...");
-      const signature = await sendTransaction(transaction, devnetConnection, {
-        skipPreflight: true,
-        maxRetries: 5,
+      const signature = await sendTransaction(transaction, connection, {
+        skipPreflight: false,
       });
 
-      console.log("Waiting for confirmation...");
-      const confirmation = await devnetConnection.confirmTransaction(
+      // 3. Immediately try to confirm with the backend.
+      setPaymentState("confirming_transaction");
+      const confirmation = await connection.confirmTransaction(
         {
           signature,
           blockhash: latestBlockhash.blockhash,
@@ -217,54 +223,108 @@ export function Paywall({ children }: { children: React.ReactNode }) {
         throw new Error("Transaction failed on-chain! Please try again.");
       }
 
-      await fetch("/api/invoice/confirm", {
+      const confirmRes = await fetch("/api/invoice/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reference, signature }),
+        signal: AbortSignal.timeout(8000),
       });
 
-      setPolling(true);
+      if (confirmRes.ok) {
+        const granted = await refreshAccess(publicKey.toBase58());
+        if (granted) {
+          setPaymentState("confirmed");
+          getUsdcBalance(connection, publicKey).then(setUsdcBalance);
+        } else {
+          setPaymentState("waiting_for_backend");
+        }
+      } else {
+        console.log(
+          "Backend confirmation failed or timed out. Moving to polling state.",
+        );
+        setPaymentState("waiting_for_backend");
+      }
     } catch (error) {
       console.error("Payment failed", error);
-      alert("Payment failed. Please check console for details.");
-      resetPayment();
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setPaymentState("waiting_for_backend");
+      } else {
+        setPaymentState("error");
+        resetPaymentState();
+      }
     }
   };
 
-  // --- RECHECK WALLET PAYMENT STATUS LOGIC ---
+  // --- FIX: RECHECK LOGIC ---
   const handleRecheck = async () => {
-    const pendingRef = localStorage.getItem("pending_payment_reference");
-    if (!pendingRef) {
-      alert("No pending payment found to check.");
+    const reference = localStorage.getItem("pending_payment_reference");
+    if (!reference) {
+      alert("No pending payment found to re-check.");
+      return;
+    }
+    if (!publicKey) {
+      alert("Connect wallet first.");
       return;
     }
 
-    setLoading(true);
+    setPaymentState("confirming_transaction"); // Show loading indicator
+
     try {
       const res = await fetch("/api/recheck", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reference: pendingRef }),
+        body: JSON.stringify({
+          reference,
+          walletAddress: publicKey.toBase58(),
+        }),
       });
+
+      if (!res.ok) {
+        setPaymentState("idle");
+        alert("Re-check failed. Please try again.");
+        return;
+      }
+
       const data = await res.json();
 
       if (data.status === "paid") {
-        setHasAccess(true);
-        localStorage.removeItem("pending_payment_reference");
-        alert("Payment confirmed! Access granted.");
+        const granted = await refreshAccess(publicKey.toBase58());
+        if (granted) {
+          setPaymentState("confirmed");
+          alert("Payment confirmed successfully! Access granted.");
+        } else {
+          setPaymentState("waiting_for_backend");
+          alert("Payment verified, finalizing access. Please wait.");
+        }
+      } else if (data.status === "confirmed_on_chain") {
+        setPaymentState("waiting_for_backend");
+        alert("Transaction found on-chain. Waiting for backend recovery.");
+      } else if (data.status === "pending") {
+        setPaymentState("waiting_for_backend");
+        alert("Payment is still pending. The network is busy. Please wait.");
       } else {
-        alert("Payment still pending or not found.");
+        resetPaymentState();
+        alert("Payment not found. The transaction may have failed or expired.");
       }
     } catch (error) {
-      console.error("Recheck failed", error);
-      alert("Error checking payment status.");
-    } finally {
-      resetPayment();
+      console.error("Re-check failed", error);
+      setPaymentState("idle");
+      alert("An error occurred while re-checking the payment status.");
     }
   };
 
-  // --- UI COMPONENTS ---
+  const disableUnlock =
+    paymentState === "creating_invoice" ||
+    paymentState === "sending_transaction" ||
+    paymentState === "confirming_transaction" ||
+    paymentState === "waiting_for_backend";
 
+  const disableRecheck =
+    paymentState === "creating_invoice" ||
+    paymentState === "sending_transaction" ||
+    paymentState === "confirming_transaction";
+
+  // --- UI COMPONENTS ---
   const Navbar = () => (
     <nav className="border-b border-gray-100 bg-white/80 backdrop-blur sticky top-0 z-50">
       <div className="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center">
@@ -384,14 +444,14 @@ export function Paywall({ children }: { children: React.ReactNode }) {
                   <WalletMultiButton className="!bg-rose-600 hover:!bg-rose-700 !w-full !justify-center" />
                 </div>
               </div>
-            ) : isExpired ? (
+            ) : paymentState === "expired" ? (
               <div className="bg-red-50 text-red-600 p-4 rounded-xl border border-red-100">
                 <p className="font-bold">Session Expired</p>
                 <p className="text-sm mb-3">
                   The 5-minute payment window has closed.
                 </p>
                 <button
-                  onClick={resetPayment}
+                  onClick={resetPaymentState}
                   className="text-sm underline hover:text-red-800 font-medium"
                 >
                   Try again
@@ -400,7 +460,7 @@ export function Paywall({ children }: { children: React.ReactNode }) {
             ) : (
               <div className="space-y-3">
                 {/* Timer Display */}
-                {timeLeft !== null && (
+                {timeLeft !== null && paymentState !== "idle" && (
                   <div
                     className={`text-xs font-mono font-medium py-1 px-3 rounded-full inline-block mb-2 ${timeLeft < 60 ? "bg-red-50 text-red-500 animate-pulse" : "bg-rose-50 text-rose-500"}`}
                   >
@@ -411,10 +471,10 @@ export function Paywall({ children }: { children: React.ReactNode }) {
                 {/* Pay Button */}
                 <button
                   onClick={handlePayment}
-                  disabled={loading || (timeLeft !== null && timeLeft > 0)}
+                  disabled={disableUnlock}
                   className="w-full py-3.5 rounded-xl bg-gray-900 text-white font-bold hover:bg-gray-800 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
                 >
-                  {loading || (timeLeft !== null && timeLeft > 0) ? (
+                  {disableUnlock ? (
                     <>
                       <svg
                         className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
@@ -436,7 +496,7 @@ export function Paywall({ children }: { children: React.ReactNode }) {
                           d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                         ></path>
                       </svg>
-                      Processing...
+                      {paymentStatusMessages[paymentState] ?? "Processing..."}
                     </>
                   ) : (
                     "Unlock Now"
@@ -446,8 +506,8 @@ export function Paywall({ children }: { children: React.ReactNode }) {
                 {/* Recheck Link */}
                 <button
                   onClick={handleRecheck}
-                  disabled={loading}
-                  className="text-xs text-gray-400 hover:text-gray-600 underline"
+                  disabled={disableRecheck}
+                  className="text-xs text-gray-400 hover:text-gray-600 underline disabled:opacity-50"
                 >
                   I already paid? Check status
                 </button>
@@ -462,6 +522,18 @@ export function Paywall({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </main>
+      {/* USDC Devnet Airdrop */}
+      <div className="fixed z-10 bottom-4 right-4 bg-gray-800 text-white p-3 rounded-lg shadow-lg text-sm">
+        <p>Need Devnet USDC?</p>
+        <a
+          href="https://faucet.circle.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-400 hover:underline"
+        >
+          Visit Circle's Faucet
+        </a>
+      </div>
     </div>
   );
 }

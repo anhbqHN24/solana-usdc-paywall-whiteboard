@@ -8,6 +8,7 @@ import {
   getAssociatedTokenAddress,
   getAccount,
   createTransferInstruction,
+  createAssociatedTokenAccountInstruction,
 } from "@solana/spl-token";
 
 // ----------------------------------------------------------------------
@@ -74,7 +75,20 @@ export async function createUsdcTransfer(
     recipient,
   );
 
-  const transaction = new Transaction().add(
+  const transaction = new Transaction();
+  const recipientAccountInfo = await connection.getAccountInfo(recipientAta);
+  if (!recipientAccountInfo) {
+    transaction.add(
+      createAssociatedTokenAccountInstruction(
+        publicKey,
+        recipientAta,
+        recipient,
+        USDC_MINT_ADDRESS,
+      ),
+    );
+  }
+
+  transaction.add(
     createTransferInstruction(
       senderAta,
       recipientAta,
@@ -88,10 +102,6 @@ export async function createUsdcTransfer(
       programId: new PublicKey("Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo"),
     }),
   );
-
-  transaction.feePayer = publicKey;
-  const { blockhash } = await connection.getLatestBlockhash();
-  transaction.recentBlockhash = blockhash;
 
   return transaction;
 }
