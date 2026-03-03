@@ -1,10 +1,10 @@
 package middleware
 
 import (
+	"fmt"
 	"net"
 	"net/http"
-	"strings"
-	"sync"
+	"solana_paywall/backend/database"
 	"time"
 )
 
@@ -14,73 +14,39 @@ const (
 	WindowSize   = 1 * time.Minute // In this window time range
 )
 
-type ClientState struct {
-	Count       int
-	WindowStart time.Time
-}
-
-var (
-	clients = make(map[string]*ClientState)
-	mu      sync.Mutex
-)
-
-// Lấy IP thật của user (hỗ trợ cả khi đứng sau Proxy/Load Balancer)
-func getRealIP(r *http.Request) string {
-	// Check header X-Forwarded-For trước
-	forwarded := r.Header.Get("X-Forwarded-For")
-	if forwarded != "" {
-		return strings.Split(forwarded, ",")[0]
+func clientIP(r *http.Request) string {
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil || ip == "" {
+		return r.RemoteAddr
 	}
-	// Fallback về RemoteAddr
-	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
 	return ip
 }
 
-// Hàm dọn dẹp bộ nhớ định kỳ để tránh memory leak
-func init() {
-	go func() {
-		for {
-			time.Sleep(10 * time.Minute)
-			mu.Lock()
-			for ip, client := range clients {
-				if time.Since(client.WindowStart) > WindowSize {
-					delete(clients, ip)
-				}
-			}
-			mu.Unlock()
-		}
-	}()
+func windowBucket(now time.Time) int64 {
+	return now.Unix() / int64(WindowSize.Seconds())
 }
 
-// Middleware RateLimit
+// Middleware RateLimit uses Redis for distributed and process-safe limiting.
 func RateLimit(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ip := getRealIP(r)
+		ip := clientIP(r)
+		bucket := windowBucket(time.Now())
+		key := fmt.Sprintf("ratelimit:recheck:%s:%d", ip, bucket)
 
-		mu.Lock()
-		client, exists := clients[ip]
-
-		if !exists || time.Since(client.WindowStart) > WindowSize {
-			// Nếu là IP mới hoặc đã qua khung thời gian cũ -> Reset
-			clients[ip] = &ClientState{
-				Count:       1,
-				WindowStart: time.Now(),
-			}
-			mu.Unlock()
-			next(w, r)
+		count, err := database.RDB.Incr(database.Ctx, key).Result()
+		if err != nil {
+			http.Error(w, "Rate limiter unavailable", http.StatusServiceUnavailable)
 			return
 		}
 
-		if client.Count >= RequestLimit {
-			// Quá giới hạn
-			mu.Unlock()
+		if count == 1 {
+			_ = database.RDB.Expire(database.Ctx, key, WindowSize).Err()
+		}
+
+		if count > RequestLimit {
 			http.Error(w, "Too many requests. Please try again later.", http.StatusTooManyRequests)
 			return
 		}
-
-		// Tăng biến đếm
-		client.Count++
-		mu.Unlock()
 
 		next(w, r)
 	}
